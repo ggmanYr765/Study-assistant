@@ -1,44 +1,36 @@
-"""OCR for handwritten/image content using Gemini Flash vision."""
+"""OCR via Gemini 2.0 Flash REST API."""
 from __future__ import annotations
-import base64
-import io
-
-import google.generativeai as genai
-from PIL import Image
-
+import httpx
 from config import settings
 
-genai.configure(api_key=settings.gemini_api_key)
-_model = genai.GenerativeModel("gemini-2.0-flash")
+_GEN_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent"
 
-
-OCR_PROMPT = """You are an expert OCR system for academic handwritten notes.
-
-Extract ALL text from this image:
-- Preserve structure: headings, bullet points, numbered lists
-- Mark formulas with [FORMULA: ...]
-- Mark circled/highlighted text with [IMPORTANT: ...]
-- Mark diagrams with [DIAGRAM: brief description]
-- Detect emphasis markers (stars, underlines, boxes)
-- Preserve question-answer relationships
-
-Output clean structured text only. No commentary."""
+OCR_PROMPT = "Extract ALL text from this image. Preserve structure: headings, bullet points, numbered lists. Mark formulas with [FORMULA: ...]. Output clean structured text only."
 
 
 def ocr_image(base64_image: str) -> str:
-    img_bytes = base64.b64decode(base64_image)
-    img = Image.open(io.BytesIO(img_bytes))
-    response = _model.generate_content([OCR_PROMPT, img])
-    return response.text or ""
+    resp = httpx.post(
+        _GEN_URL,
+        params={"key": settings.gemini_api_key},
+        json={
+            "contents": [{
+                "parts": [
+                    {"text": OCR_PROMPT},
+                    {"inline_data": {"mime_type": "image/png", "data": base64_image}},
+                ]
+            }]
+        },
+        timeout=60,
+    )
+    resp.raise_for_status()
+    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def ocr_images(base64_images: list[str]) -> str:
     results = []
     for img in base64_images:
         try:
-            text = ocr_image(img)
-            results.append(text)
+            results.append(ocr_image(img))
         except Exception as e:
             print(f"OCR error: {e}", flush=True)
     return "\n\n".join(r for r in results if r.strip())
-
