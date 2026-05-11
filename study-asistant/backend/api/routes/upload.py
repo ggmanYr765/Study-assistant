@@ -1,8 +1,11 @@
 """File upload and ingestion pipeline."""
 from __future__ import annotations
+import logging
 import os
 from pathlib import Path
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import text
@@ -37,12 +40,10 @@ async def upload_document(
     doc_type: str = Form("other"),
     db: AsyncSession = Depends(get_db),
 ):
-    # verify session exists
     row = await db.execute(text("SELECT id FROM sessions WHERE id = :id"), {"id": str(session_id)})
     if not row.fetchone():
         raise HTTPException(404, "Session not found")
 
-    # save file
     upload_dir = Path(settings.upload_dir) / str(session_id)
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_path = upload_dir / file.filename
@@ -94,9 +95,10 @@ async def ingest_document(doc_id: str, session_id: str, file_path: str, doc_type
     """Background ingestion: parse → OCR → chunk → embed → store."""
     async with AsyncSessionLocal() as db:
         try:
+            logger.info("Starting ingestion for doc %s", doc_id)
             parsed = parse_file(file_path)
+            logger.info("Parsed doc %s: %d pages", doc_id, parsed.page_count)
 
-            # prefer extracted text; only OCR when page has no text at all
             page_texts: dict[int, str] = {}
             for page in parsed.pages:
                 if page.text and len(page.text.strip()) > 30:
@@ -104,7 +106,9 @@ async def ingest_document(doc_id: str, session_id: str, file_path: str, doc_type
                 elif page.images:
                     page_texts[page.page_number] = ocr_images(page.images)
 
+            logger.info("Got text for %d pages", len(page_texts))
             chunks = chunk_document(parsed, page_texts)
+            logger.info("Created %d chunks", len(chunks))
 
             if not chunks:
                 await db.execute(
@@ -114,9 +118,10 @@ async def ingest_document(doc_id: str, session_id: str, file_path: str, doc_type
                 await db.commit()
                 return
 
-            # embed all chunks in one batch
             texts = [c.content for c in chunks]
+            logger.info("Embedding %d chunks via Gemini", len(texts))
             embeddings = embed_texts(texts)
+            logger.info("Got %d embeddings", len(embeddings))
 
             for chunk, emb in zip(chunks, embeddings):
                 vec_str = "[" + ",".join(str(x) for x in emb) + "]"
@@ -147,16 +152,16 @@ async def ingest_document(doc_id: str, session_id: str, file_path: str, doc_type
                 {"pc": parsed.page_count, "id": doc_id},
             )
             await db.commit()
+            logger.info("Ingestion complete for doc %s", doc_id)
 
-            # upload to R2 then delete local temp file
             if r2_key and settings.r2_account_id:
                 r2_upload(file_path, r2_key)
                 Path(file_path).unlink(missing_ok=True)
 
         except Exception as e:
+            logger.error("Ingestion failed for doc %s: %s", doc_id, e, exc_info=True)
             await db.execute(
                 text("UPDATE documents SET status='error' WHERE id=:id"),
                 {"id": doc_id},
             )
             await db.commit()
-            raise
