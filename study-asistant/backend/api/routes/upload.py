@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from db.database import get_db, AsyncSessionLocal
-from ingestion.chunker import chunk_document
+from ingestion.chunker import chunk_document, Chunk
 from ingestion.embedder import embed_texts
 from ingestion.ocr import ocr_images
 from ingestion.parser import parse_file
@@ -97,28 +97,33 @@ async def ingest_document(doc_id: str, session_id: str, file_path: str, doc_type
         try:
             logger.info("Starting ingestion for doc %s", doc_id)
             parsed = parse_file(file_path)
-            logger.info("Parsed %d pages", parsed.page_count)
+            logger.info("Parsed %d pages from %s", parsed.page_count, file_path)
 
             page_texts: dict[int, str] = {}
             for page in parsed.pages:
-                if page.text and len(page.text.strip()) > 30:
+                if page.text and page.text.strip():
                     page_texts[page.page_number] = page.text
                 elif page.images:
                     page_texts[page.page_number] = ocr_images(page.images)
 
-            logger.info("Extracted text from %d pages", len(page_texts))
+            logger.info("Got text for %d / %d pages", len(page_texts), parsed.page_count)
             chunks = chunk_document(parsed, page_texts)
             logger.info("Chunker produced %d chunks", len(chunks))
 
-            if not chunks and page_texts:
-                from ingestion.chunker import Chunk as _Chunk
-                all_text = "\n\n".join(page_texts.values()).strip()
+            if not chunks:
+                all_parts = []
+                for page in parsed.pages:
+                    t = page_texts.get(page.page_number, page.text or "").strip()
+                    if t:
+                        all_parts.append(t)
+                all_text = "\n\n".join(all_parts).strip()
                 if all_text:
-                    logger.info("Using fallback single chunk")
-                    chunks = [_Chunk(content=all_text[:8000], heading="", chunk_type="text", page_number=1)]
+                    logger.info("Fallback: storing %d chars as single chunk", len(all_text))
+                    chunks = [Chunk(content=all_text[:8000], heading="", chunk_type="text", page_number=1)]
+                else:
+                    logger.warning("No text found at all in doc %s", doc_id)
 
             if not chunks:
-                logger.warning("No text found in document %s", doc_id)
                 await db.execute(
                     text("UPDATE documents SET status='ready', page_count=:pc WHERE id=:id"),
                     {"pc": parsed.page_count, "id": doc_id},
@@ -129,6 +134,7 @@ async def ingest_document(doc_id: str, session_id: str, file_path: str, doc_type
             texts = [c.content for c in chunks]
             logger.info("Embedding %d chunks", len(texts))
             embeddings = embed_texts(texts)
+            logger.info("Got %d embeddings", len(embeddings))
 
             for chunk, emb in zip(chunks, embeddings):
                 vec_str = "[" + ",".join(str(x) for x in emb) + "]"
@@ -159,7 +165,7 @@ async def ingest_document(doc_id: str, session_id: str, file_path: str, doc_type
                 {"pc": parsed.page_count, "id": doc_id},
             )
             await db.commit()
-            logger.info("Ingestion complete for doc %s", doc_id)
+            logger.info("Ingestion complete for doc %s — %d chunks stored", doc_id, len(chunks))
 
             if r2_key and settings.r2_account_id:
                 r2_upload(file_path, r2_key)
