@@ -1,7 +1,8 @@
-"""Embeddings via HuggingFace Inference API — no local model needed."""
+"""Embeddings via HuggingFace Inference API."""
 from __future__ import annotations
 import numpy as np
 import httpx
+from config import settings
 
 _HF_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
 
@@ -9,6 +10,7 @@ _HF_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all
 def _embed(texts: list[str]) -> list[list[float]]:
     resp = httpx.post(
         _HF_URL,
+        headers={"Authorization": f"Bearer {settings.hf_token}"},
         json={"inputs": texts, "options": {"wait_for_model": True}},
         timeout=120,
     )
