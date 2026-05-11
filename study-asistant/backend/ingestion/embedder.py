@@ -1,12 +1,9 @@
-"""Gemini text-embedding-004 — no heavy local models needed."""
+"""Gemini text-embedding-004 via REST API."""
 from __future__ import annotations
-
-import google.generativeai as genai
+import httpx
 from config import settings
 
-genai.configure(api_key=settings.gemini_api_key)
-
-_EMBED_MODEL = "models/text-embedding-004"
+_EMBED_URL = "https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent"
 _DIM = 384
 
 
@@ -15,21 +12,33 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
         return []
     embeddings = []
     for text in texts:
-        result = genai.embed_content(
-            model=_EMBED_MODEL,
-            content=text,
-            task_type="retrieval_document",
-            output_dimensionality=_DIM,
+        resp = httpx.post(
+            _EMBED_URL,
+            params={"key": settings.gemini_api_key},
+            json={
+                "model": "models/text-embedding-004",
+                "content": {"parts": [{"text": text}]},
+                "taskType": "RETRIEVAL_DOCUMENT",
+                "outputDimensionality": _DIM,
+            },
+            timeout=30,
         )
-        embeddings.append(result["embedding"])
+        resp.raise_for_status()
+        embeddings.append(resp.json()["embedding"]["values"])
     return embeddings
 
 
 def embed_query(query: str) -> list[float]:
-    result = genai.embed_content(
-        model=_EMBED_MODEL,
-        content=query,
-        task_type="retrieval_query",
-        output_dimensionality=_DIM,
+    resp = httpx.post(
+        _EMBED_URL,
+        params={"key": settings.gemini_api_key},
+        json={
+            "model": "models/text-embedding-004",
+            "content": {"parts": [{"text": query}]},
+            "taskType": "RETRIEVAL_QUERY",
+            "outputDimensionality": _DIM,
+        },
+        timeout=30,
     )
-    return result["embedding"]
+    resp.raise_for_status()
+    return resp.json()["embedding"]["values"]
