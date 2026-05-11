@@ -37,6 +37,11 @@ def parse_pdf(filepath: str | Path) -> ParsedDocument:
             img_bytes = base_img["image"]
             images.append(base64.b64encode(img_bytes).decode())
 
+        # render page as image when text extraction returns nothing
+        if not text and not images:
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+            images.append(base64.b64encode(pix.tobytes("png")).decode())
+
         # heuristic: low text density with images suggests handwriting
         has_handwriting = len(images) > 0 and len(text) < 200
 
