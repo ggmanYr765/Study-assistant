@@ -1,35 +1,29 @@
-"""Embeddings via HuggingFace Inference API."""
+"""Embeddings via OpenRouter."""
 from __future__ import annotations
-import numpy as np
-import httpx
+from openai import OpenAI
 from config import settings
 
-_HF_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
-
-
-def _embed(texts: list[str]) -> list[list[float]]:
-    resp = httpx.post(
-        _HF_URL,
-        headers={"Authorization": f"Bearer {settings.hf_token}"},
-        json={"inputs": texts, "options": {"wait_for_model": True}},
-        timeout=120,
-    )
-    resp.raise_for_status()
-    result = resp.json()
-    embeddings = []
-    for item in result:
-        if isinstance(item[0], list):
-            embeddings.append(np.mean(item, axis=0).tolist())
-        else:
-            embeddings.append(item)
-    return embeddings
+_client = OpenAI(
+    api_key=settings.openrouter_api_key,
+    base_url="https://openrouter.ai/api/v1",
+)
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
-    return _embed(texts)
+    resp = _client.embeddings.create(
+        model="openai/text-embedding-3-small",
+        input=texts,
+        dimensions=384,
+    )
+    return [item.embedding for item in resp.data]
 
 
 def embed_query(query: str) -> list[float]:
-    return _embed([query])[0]
+    resp = _client.embeddings.create(
+        model="openai/text-embedding-3-small",
+        input=[query],
+        dimensions=384,
+    )
+    return resp.data[0].embedding
