@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/studyassistant"
     deepseek_api_key: str
     gemini_api_key: str = ""
+    hf_token: str = ""
     openrouter_api_key: str = ""
     upload_dir: str = "uploads"  # temp dir for processing before R2 upload
     # Cloudflare R2
