@@ -1,27 +1,35 @@
-"""Local sentence-transformers embeddings — no API key required."""
+"""Gemini text-embedding-004 — no heavy local models needed."""
 from __future__ import annotations
 
-from sentence_transformers import SentenceTransformer
-
+import google.generativeai as genai
 from config import settings
 
-_model: SentenceTransformer | None = None
+genai.configure(api_key=settings.gemini_api_key)
 
-
-def _get_model() -> SentenceTransformer:
-    global _model
-    if _model is None:
-        _model = SentenceTransformer(settings.embedding_model)
-    return _model
+_EMBED_MODEL = "models/text-embedding-004"
+_DIM = 384
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
-    model = _get_model()
-    embeddings = model.encode(texts, batch_size=64, show_progress_bar=False)
-    return [e.tolist() for e in embeddings]
+    embeddings = []
+    for text in texts:
+        result = genai.embed_content(
+            model=_EMBED_MODEL,
+            content=text,
+            task_type="retrieval_document",
+            output_dimensionality=_DIM,
+        )
+        embeddings.append(result["embedding"])
+    return embeddings
 
 
 def embed_query(query: str) -> list[float]:
-    return embed_texts([query])[0]
+    result = genai.embed_content(
+        model=_EMBED_MODEL,
+        content=query,
+        task_type="retrieval_query",
+        output_dimensionality=_DIM,
+    )
+    return result["embedding"]
