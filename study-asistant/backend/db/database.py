@@ -9,7 +9,6 @@ engine = create_async_engine(
     pool_pre_ping=True,
     connect_args={"statement_cache_size": 0},
 )
-
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
@@ -22,7 +21,6 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\""))
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS sessions (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -32,7 +30,6 @@ async def init_db():
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """))
-
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS documents (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -45,7 +42,6 @@ async def init_db():
                 uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """))
-
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS chunks (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -60,7 +56,6 @@ async def init_db():
                 metadata JSONB NOT NULL DEFAULT '{}'
             )
         """))
-
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS predicted_questions (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -76,7 +71,6 @@ async def init_db():
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """))
-
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS skip_analysis (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -90,8 +84,6 @@ async def init_db():
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         """))
-
-        # indexes (ignore if exist)
         for idx_sql in [
             "CREATE INDEX IF NOT EXISTS idx_chunks_session ON chunks(session_id)",
             "CREATE INDEX IF NOT EXISTS idx_chunks_priority ON chunks(session_id, source_priority)",
