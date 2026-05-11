@@ -25,7 +25,7 @@ DEFINITION_RE = re.compile(
 )
 
 MAX_CHUNK_CHARS = 1200
-MIN_CHUNK_CHARS = 80
+MIN_CHUNK_CHARS = 20
 
 
 def _detect_type(text: str) -> str:
@@ -75,7 +75,6 @@ def _split_long(text: str, heading: str, page: int) -> list[Chunk]:
                 chunk_type=_detect_type(body),
                 page_number=page,
             ))
-            # overlap: keep last paragraph
             current = [current[-1], para]
             current_len = len(current[-2]) + len(para)
         else:
@@ -122,6 +121,16 @@ def chunk_document(doc: ParsedDocument, page_texts: dict[int, str]) -> list[Chun
     all_chunks: list[Chunk] = []
     for page in doc.pages:
         text = page_texts.get(page.page_number, page.text)
-        if text:
-            all_chunks.extend(chunk_page(page, text))
+        if not text or not text.strip():
+            continue
+        page_chunks = chunk_page(page, text)
+        if page_chunks:
+            all_chunks.extend(page_chunks)
+        elif len(text.strip()) >= MIN_CHUNK_CHARS:
+            all_chunks.append(Chunk(
+                content=text.strip(),
+                heading="",
+                chunk_type=_detect_type(text),
+                page_number=page.page_number,
+            ))
     return all_chunks
