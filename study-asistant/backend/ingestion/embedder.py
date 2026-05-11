@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import httpx
 
-_HF_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
+_HF_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
 
 
 def _embed(texts: list[str]) -> list[list[float]]:
