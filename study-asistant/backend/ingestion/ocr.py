@@ -35,7 +35,9 @@ def ocr_images(base64_images: list[str]) -> str:
     results = []
     for img in base64_images:
         try:
-            results.append(ocr_image(img))
-        except Exception:
-            pass
+            text = ocr_image(img)
+            results.append(text)
+        except Exception as e:
+            print(f"OCR error: {e}", flush=True)
     return "\n\n".join(r for r in results if r.strip())
+
