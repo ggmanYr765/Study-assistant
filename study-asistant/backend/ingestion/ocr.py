@@ -13,7 +13,7 @@ OCR_PROMPT = "Extract ALL text from this image. Preserve structure: headings, bu
 
 def ocr_image(base64_image: str) -> str:
     response = _client.chat.completions.create(
-        model="google/gemini-2.0-flash-exp:free",
+        model="meta-llama/llama-3.2-11b-vision-instruct",
         messages=[{
             "role": "user",
             "content": [
