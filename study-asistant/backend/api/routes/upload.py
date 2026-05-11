@@ -97,7 +97,7 @@ async def ingest_document(doc_id: str, session_id: str, file_path: str, doc_type
         try:
             logger.info("Starting ingestion for doc %s", doc_id)
             parsed = parse_file(file_path)
-            logger.info("Parsed doc %s: %d pages", doc_id, parsed.page_count)
+            logger.info("Parsed %d pages", parsed.page_count)
 
             page_texts: dict[int, str] = {}
             for page in parsed.pages:
@@ -106,11 +106,19 @@ async def ingest_document(doc_id: str, session_id: str, file_path: str, doc_type
                 elif page.images:
                     page_texts[page.page_number] = ocr_images(page.images)
 
-            logger.info("Got text for %d pages", len(page_texts))
+            logger.info("Extracted text from %d pages", len(page_texts))
             chunks = chunk_document(parsed, page_texts)
-            logger.info("Created %d chunks", len(chunks))
+            logger.info("Chunker produced %d chunks", len(chunks))
+
+            if not chunks and page_texts:
+                from ingestion.chunker import Chunk as _Chunk
+                all_text = "\n\n".join(page_texts.values()).strip()
+                if all_text:
+                    logger.info("Using fallback single chunk")
+                    chunks = [_Chunk(content=all_text[:8000], heading="", chunk_type="text", page_number=1)]
 
             if not chunks:
+                logger.warning("No text found in document %s", doc_id)
                 await db.execute(
                     text("UPDATE documents SET status='ready', page_count=:pc WHERE id=:id"),
                     {"pc": parsed.page_count, "id": doc_id},
@@ -119,9 +127,8 @@ async def ingest_document(doc_id: str, session_id: str, file_path: str, doc_type
                 return
 
             texts = [c.content for c in chunks]
-            logger.info("Embedding %d chunks via Gemini", len(texts))
+            logger.info("Embedding %d chunks", len(texts))
             embeddings = embed_texts(texts)
-            logger.info("Got %d embeddings", len(embeddings))
 
             for chunk, emb in zip(chunks, embeddings):
                 vec_str = "[" + ",".join(str(x) for x in emb) + "]"
