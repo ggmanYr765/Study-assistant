@@ -1,10 +1,9 @@
-"""OCR via Gemini 2.0 Flash REST API."""
+"""OCR via Gemini REST API."""
 from __future__ import annotations
 import httpx
 from config import settings
 
-_GEN_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-
+_GEN_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent"
 
 OCR_PROMPT = "Extract ALL text from this image. Preserve structure: headings, bullet points, numbered lists. Mark formulas with [FORMULA: ...]. Output clean structured text only."
 
@@ -27,7 +26,7 @@ def ocr_image(base64_image: str) -> str:
     return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
-def ocr_images(base64_images: list[str]) -> str:
+async def ocr_images(base64_images: list[str]) -> str:
     results = []
     for img in base64_images:
         try:
