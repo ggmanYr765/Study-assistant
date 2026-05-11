@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 from config import settings
 
-_GEN_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent"
+_GEN_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 OCR_PROMPT = "Extract ALL text from this image. Preserve structure: headings, bullet points, numbered lists. Mark formulas with [FORMULA: ...]. Output clean structured text only."
 
